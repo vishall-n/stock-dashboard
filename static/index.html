@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📈 Stock Intelligence Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ── Reset & Base ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22253a;
+      --accent:    #4f8ef7;
+      --accent2:   #36d399;
+      --danger:    #f87171;
+      --text:      #e2e8f0;
+      --muted:     #6b7280;
+      --border:    #2d3148;
+      --radius:    12px;
+      --sidebar-w: 240px;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.15rem; font-weight: 700; }
+    header span.badge {
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+    .filter-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      transition: all .2s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    aside {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sidebar-title {
+      padding: 12px 16px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .company-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .company-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .company-item:hover { background: var(--surface2); }
+    .company-item.active { background: rgba(79,142,247,.15); border-left: 3px solid var(--accent); }
+    .company-item .sym  { font-weight: 700; font-size: .88rem; }
+    .company-item .name { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+    .company-item .price { font-size: .8rem; font-weight: 600; margin-top: 4px; }
+    .company-item .change { font-size: .72rem; }
+    .up   { color: var(--accent2); }
+    .down { color: var(--danger); }
+
+    /* ── Main Content ────────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+    .card-title {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── Stats Row ───────────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .stat-card .label { font-size: .7rem; color: var(--muted); }
+    .stat-card .value { font-size: 1.15rem; font-weight: 700; margin-top: 4px; }
+    .stat-card .sub   { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Chart Container ─────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 280px; }
+
+    /* ── Compare Panel ───────────────────────────────────────────────── */
+    .compare-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .compare-row select, .compare-row button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .compare-row button {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .compare-row button:hover { opacity: .85; }
+    #corr-badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: .78rem;
+    }
+
+    /* ── Movers Table ────────────────────────────────────────────────── */
+    .movers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    th { color: var(--muted); font-weight: 500; padding: 6px 8px; text-align: left; font-size: .7rem; border-bottom: 1px solid var(--border); }
+    td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+
+    /* ── Loading / Empty ─────────────────────────────────────────────── */
+    .placeholder {
+      color: var(--muted);
+      font-size: .88rem;
+      text-align: center;
+      padding: 40px;
+    }
+    #loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,17,23,.85);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; z-index: 999;
+      transition: opacity .3s;
+    }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-right: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div> Loading market data…
+</div>
+
+<!-- Header -->
+<header>
+  <span>📈</span>
+  <h1>Stock Intelligence Dashboard</h1>
+  <span class="badge">NSE Live</span>
+  <div class="header-right">
+    <button class="filter-btn active" data-days="30">30D</button>
+    <button class="filter-btn" data-days="90">90D</button>
+    <button class="filter-btn" data-days="180">180D</button>
+    <button class="filter-btn" data-days="365">1Y</button>
+  </div>
+</header>
+
+<!-- Layout -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="sidebar-title">Companies</div>
+    <div class="company-list" id="company-list">
+      <div class="placeholder">Loading…</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main-panel">
+    <div class="placeholder" id="welcome-msg">
+      ← Select a company to view its data
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const API = window.location.origin;   // points to FastAPI server
+let activeDays    = 30;
+let activeSymbol  = null;
+let priceChart    = null;
+let compareChart  = null;
+let allCompanies  = [];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const fmt = n  => Number(n).toLocaleString('en-IN', {maximumFractionDigits: 2});
+
+async function apiFetch(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`API ${path} → ${r.status}`);
+  return r.json();
+}
+
+function hide(id) { const el = $(id); if (el) el.style.display = 'none'; }
+function show(id, d='block') { const el = $(id); if (el) el.style.display = d; }
+
+function destroyChart(ref) { if (ref) { ref.destroy(); } return null; }
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    allCompanies = await apiFetch('/companies');
+    buildSidebar(allCompanies);
+    await loadMovers();
+  } catch(e) {
+    $('company-list').innerHTML = `<div class="placeholder">Failed to load companies.<br>${e.message}</div>`;
+  } finally {
+    $('loading-overlay').style.opacity = 0;
+    setTimeout(() => hide('loading-overlay'), 300);
+  }
+})();
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function buildSidebar(companies) {
+  const list = $('company-list');
+  list.innerHTML = companies.map(c => `
+    <div class="company-item" id="item-${c.symbol}" onclick="selectCompany('${c.symbol}')">
+      <div class="sym">${c.symbol}</div>
+      <div class="name">${c.name}</div>
+      <div class="price" id="price-${c.symbol}">—</div>
+      <div class="change" id="chg-${c.symbol}"></div>
+    </div>
+  `).join('');
+
+  // Fetch summary prices in background
+  companies.forEach(async c => {
+    try {
+      const s = await apiFetch(`/summary/${c.symbol}`);
+      const el = $(`price-${c.symbol}`);
+      const chg = $(`chg-${c.symbol}`);
+      if (el) el.textContent = '₹' + fmt(s.latest_close);
+      if (chg) {
+        const up = s.change_pct >= 0;
+        chg.textContent = (up ? '▲' : '▼') + ' ' + Math.abs(s.change_pct) + '%';
+        chg.className = 'change ' + (up ? 'up' : 'down');
+      }
+    } catch(e) { /* silently skip */ }
+  });
+}
+
+// ── Day filter buttons ─────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn[data-days]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn[data-days]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeDays = parseInt(btn.dataset.days);
+    if (activeSymbol) loadCompanyView(activeSymbol);
+  });
+});
+
+// ── Select Company ──────────────────────────────────────────────────────────
+function selectCompany(symbol) {
+  document.querySelectorAll('.company-item').forEach(el => el.classList.remove('active'));
+  const item = $(`item-${symbol}`);
+  if (item) item.classList.add('active');
+  activeSymbol = symbol;
+  loadCompanyView(symbol);
+}
+
+async function loadCompanyView(symbol) {
+  const main = $('main-panel');
+  main.innerHTML = `<div class="placeholder"><div class="spinner" style="margin:auto"></div></div>`;
+
+  try {
+    const [summary, stockData] = await Promise.all([
+      apiFetch(`/summary/${symbol}`),
+      apiFetch(`/data/${symbol}?days=${activeDays}`),
+    ]);
+    renderCompanyView(symbol, summary, stockData.data);
+  } catch(e) {
+    main.innerHTML = `<div class="placeholder">Error loading ${symbol}: ${e.message}</div>`;
+  }
+}
+
+// ── Render Company View ─────────────────────────────────────────────────────
+function renderCompanyView(symbol, s, rows) {
+  const up = s.change_pct >= 0;
+
+  const main = $('main-panel');
+  main.innerHTML = `
+    <!-- Stats -->
+    <div class="card">
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+        <span style="font-size:1.3rem;font-weight:800">${s.name}</span>
+        <span style="color:var(--muted);font-size:.85rem">${symbol} · NSE</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Latest Close</div>
+          <div class="value">₹${fmt(s.latest_close)}</div>
+          <div class="sub ${up ? 'up' : 'down'}">${up?'▲':'▼'} ${Math.abs(s.change_pct)}% today</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">52W High</div>
+          <div class="value up">₹${fmt(s.week52_high)}</div>
+          <div class="sub">as of ${s.as_of}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">52W Low</div>
+          <div class="value down">₹${fmt(s.week52_low)}</div>
+          <div class="sub">trailing 1 year</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Avg Close (1Y)</div>
+          <div class="value">₹${fmt(s.avg_close)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Volatility Score</div>
+          <div class="value">${(s.volatility_score*100).toFixed(1)}%</div>
+          <div class="sub">14d annualised σ</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Avg Daily Volume</div>
+          <div class="value">${(s.avg_volume/1e5).toFixed(1)}L</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Price Chart -->
+    <div class="card">
+      <div class="card-title">Closing Price · ${activeDays}-Day · with 7-Day MA</div>
+      <div class="chart-wrap"><canvas id="priceCanvas"></canvas></div>
+    </div>
+
+    <!-- Compare Panel -->
+    <div class="card">
+      <div class="card-title">Compare with Another Stock</div>
+      <div class="compare-row">
+        <span style="font-size:.82rem;color:var(--muted)">Compare</span>
+        <strong>${symbol}</strong>
+        <span style="font-size:.82rem;color:var(--muted)">vs</span>
+        <select id="cmp-select">
+          ${allCompanies.filter(c=>c.symbol!==symbol).map(c=>`<option value="${c.symbol}">${c.symbol} – ${c.name}</option>`).join('')}
+        </select>
+        <button onclick="runCompare('${symbol}')">Compare →</button>
+        <span id="corr-badge" style="display:none"></span>
+      </div>
+      <div class="chart-wrap" style="height:220px;margin-top:14px"><canvas id="cmpCanvas"></canvas></div>
+    </div>
+
+    <!-- Top Movers -->
+    <div class="card">
+      <div class="card-title">Market Movers (Latest Day)</div>
+      <div class="movers-grid" id="movers-grid">
+        <div class="placeholder">Loading…</div>
+      </div>
+    </div>
+  `;
+
+  drawPriceChart(rows);
+  loadMovers();
+}
+
+// ── Price Chart ─────────────────────────────────────────────────────────────
+function drawPriceChart(rows) {
+  priceChart = destroyChart(priceChart);
+  const ctx = document.getElementById('priceCanvas');
+  if (!ctx) return;
+
+  const labels = rows.map(r => r.date);
+  const closes = rows.map(r => r.close);
+  const ma7    = rows.map(r => r.ma_7);
+
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Close',
+          data: closes,
+          borderColor: '#4f8ef7',
+          backgroundColor: 'rgba(79,142,247,0.08)',
+          fill: true,
+          pointRadius: 0,
+          tension: 0.3,
+          borderWidth: 2,
+        },
+        {
+          label: '7-Day MA',
+          data: ma7,
+          borderColor: '#f59e0b',
+          pointRadius: 0,
+          tension: 0.3,
+          borderWidth: 1.5,
+          borderDash: [5,3],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#9ca3af', boxWidth: 14 } },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', maxTicksLimit: 8 }, grid: { color: '#1e2133' } },
+        y: { ticks: { color: '#6b7280' }, grid: { color: '#1e2133' } }
+      }
+    }
+  });
+}
+
+// ── Compare Chart ───────────────────────────────────────────────────────────
+async function runCompare(sym1) {
+  const sym2 = $('cmp-select').value;
+  try {
+    const res = await apiFetch(`/compare?symbol1=${sym1}&symbol2=${sym2}&days=${activeDays}`);
+    const badge = $('corr-badge');
+    badge.style.display = 'inline';
+    badge.textContent = `Correlation: ${res.correlation}`;
+
+    compareChart = destroyChart(compareChart);
+    const ctx = document.getElementById('cmpCanvas');
+    if (!ctx) return;
+
+    const labels = res.data.map(r => r.date);
+    compareChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: sym1,
+            data: res.data.map(r => r[`norm_${sym1}`]),
+            borderColor: '#4f8ef7',
+            pointRadius: 0,
+            tension: 0.3,
+            borderWidth: 2,
+          },
+          {
+            label: sym2,
+            data: res.data.map(r => r[`norm_${sym2}`]),
+            borderColor: '#36d399',
+            pointRadius: 0,
+            tension: 0.3,
+            borderWidth: 2,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#9ca3af', boxWidth: 14 } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { ticks: { color: '#6b7280', maxTicksLimit: 8 }, grid: { color: '#1e2133' } },
+          y: {
+            ticks: { color: '#6b7280', callback: v => v.toFixed(0) },
+            grid: { color: '#1e2133' },
+            title: { display: true, text: 'Normalised (base=100)', color: '#6b7280', font: { size: 10 } }
+          }
+        }
+      }
+    });
+  } catch(e) {
+    alert('Compare failed: ' + e.message);
+  }
+}
+
+// ── Market Movers ───────────────────────────────────────────────────────────
+async function loadMovers() {
+  const el = $('movers-grid');
+  if (!el) return;
+  try {
+    const { gainers, losers } = await apiFetch('/movers?n=5');
+    el.innerHTML = `
+      <div>
+        <div class="card-title" style="color:var(--accent2)">▲ Top Gainers</div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Price</th><th>Return</th></tr></thead>
+          <tbody>${gainers.map(g=>`
+            <tr>
+              <td><strong>${g.symbol}</strong><br><span style="color:var(--muted);font-size:.7rem">${g.name}</span></td>
+              <td>₹${fmt(g.close)}</td>
+              <td class="up">+${g.daily_return}%</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="card-title" style="color:var(--danger)">▼ Top Losers</div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Price</th><th>Return</th></tr></thead>
+          <tbody>${losers.map(l=>`
+            <tr>
+              <td><strong>${l.symbol}</strong><br><span style="color:var(--muted);font-size:.7rem">${l.name}</span></td>
+              <td>₹${fmt(l.close)}</td>
+              <td class="down">${l.daily_return}%</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch(e) {
+    if (el) el.innerHTML = `<div class="placeholder">Could not load movers.</div>`;
+  }
+}
+</script>
+</body>
+</html>
