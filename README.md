@@ -24,7 +24,7 @@ stock_dashboard/
 ### 1 · Clone & install dependencies
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/vishall-n/stock-dashboard
 cd stock_dashboard
 pip install -r requirements.txt
 ```
